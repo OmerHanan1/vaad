@@ -304,8 +304,18 @@
 
         function parseDate(dateStr) {
             if (!dateStr) return null;
-            // Try different date formats: DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
             const parts = dateStr.split(/[\/\-\.]/);
+
+            // Format: M.YYYY or MM.YYYY (e.g., "1.2026", "10.2025")
+            if (parts.length === 2) {
+                const month = parseInt(parts[0]) - 1;
+                const year = parseInt(parts[1]);
+                if (year > 1900 && month >= 0 && month < 12) {
+                    return new Date(year, month, 1);
+                }
+            }
+
+            // Format: DD/MM/YYYY, DD-MM-YYYY, DD.MM.YYYY
             if (parts.length === 3) {
                 const day = parseInt(parts[0]);
                 const month = parseInt(parts[1]) - 1;
