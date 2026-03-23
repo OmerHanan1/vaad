@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ועד בית - תקציב משותף</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+
+        .summary {
+            background: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .summary h2 {
+            margin-top: 0;
+            color: #444;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .summary-item {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 6px;
+            border-right: 4px solid #4CAF50;
+        }
+
+        .summary-item .category {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .summary-item .amount {
+            font-size: 1.3em;
+            color: #4CAF50;
+            margin-top: 5px;
+        }
+
+        .total {
+            font-size: 1.4em;
+            font-weight: bold;
+            text-align: center;
+            padding: 15px;
+            background: #4CAF50;
+            color: white;
+            border-radius: 6px;
+        }
+
+        .expenses {
+            background: #fff;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .expenses h2 {
+            margin-top: 0;
+            color: #444;
+            border-bottom: 2px solid #2196F3;
+            padding-bottom: 10px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: right;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background: #f0f0f0;
+            font-weight: bold;
+            color: #333;
+        }
+
+        tr:hover {
+            background: #f9f9f9;
+        }
+
+        .amount-cell {
+            font-weight: bold;
+            color: #e53935;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error {
+            text-align: center;
+            padding: 40px;
+            color: #e53935;
+            background: #ffebee;
+            border-radius: 8px;
+        }
+
+        .last-updated {
+            text-align: center;
+            color: #888;
+            font-size: 0.9em;
+            margin-top: 20px;
+        }
+
+        @media (max-width: 600px) {
+            table {
+                font-size: 0.9em;
+            }
+
+            th, td {
+                padding: 8px 5px;
+            }
+
+            .subcategory-col {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ועד בית - תקציב משותף</h1>
+
+        <div class="summary">
+            <h2>סיכום לפי קטגוריה</h2>
+            <div id="summary-content">
+                <div class="loading">טוען נתונים...</div>
+            </div>
+        </div>
+
+        <div class="expenses">
+            <h2>פירוט הוצאות</h2>
+            <div id="expenses-content">
+                <div class="loading">טוען נתונים...</div>
+            </div>
+        </div>
+
+        <div class="last-updated" id="last-updated"></div>
+    </div>
+
+    <script>
+        const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTOyBif9eL7EFlu2swoEwlnpnBu70YZXJK0we1Sh6qvifMtj5vlRukeG2cMN0eJIgsKz5m1c739gI7S/pub?output=csv';
+
+        async function fetchData() {
+            try {
+                const response = await fetch(SHEET_CSV_URL);
+                if (!response.ok) throw new Error('Failed to fetch data');
+                const csvText = await response.text();
+                return parseCSV(csvText);
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                throw error;
+            }
+        }
+
+        function parseCSV(csvText) {
+            const lines = csvText.split('\n').filter(line => line.trim());
+            if (lines.length < 2) return [];
+
+            const headers = parseCSVLine(lines[0]);
+            const data = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                const values = parseCSVLine(lines[i]);
+                if (values.length >= 4) {
+                    data.push({
+                        date: values[0] || '',
+                        category: values[1] || '',
+                        subcategory: values[2] || '',
+                        amount: parseFloat(values[3]?.replace(/[^\d.-]/g, '')) || 0,
+                        description: values[4] || ''
+                    });
+                }
+            }
+
+            return data;
+        }
+
+        function parseCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current.trim());
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            result.push(current.trim());
+
+            return result;
+        }
+
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('he-IL', {
+                style: 'currency',
+                currency: 'ILS'
+            }).format(amount);
+        }
+
+        function renderSummary(data) {
+            const summaryContent = document.getElementById('summary-content');
+
+            if (data.length === 0) {
+                summaryContent.innerHTML = '<div class="error">אין נתונים להצגה</div>';
+                return;
+            }
+
+            // Calculate totals by category
+            const categoryTotals = {};
+            let grandTotal = 0;
+
+            data.forEach(item => {
+                if (item.category) {
+                    categoryTotals[item.category] = (categoryTotals[item.category] || 0) + item.amount;
+                    grandTotal += item.amount;
+                }
+            });
+
+            // Render summary
+            let html = '<div class="summary-grid">';
+
+            Object.entries(categoryTotals)
+                .sort((a, b) => b[1] - a[1])
+                .forEach(([category, total]) => {
+                    html += `
+                        <div class="summary-item">
+                            <div class="category">${category}</div>
+                            <div class="amount">${formatCurrency(total)}</div>
+                        </div>
+                    `;
+                });
+
+            html += '</div>';
+            html += `<div class="total">סה"כ: ${formatCurrency(grandTotal)}</div>`;
+
+            summaryContent.innerHTML = html;
+        }
+
+        function renderExpenses(data) {
+            const expensesContent = document.getElementById('expenses-content');
+
+            if (data.length === 0) {
+                expensesContent.innerHTML = '<div class="error">אין נתונים להצגה</div>';
+                return;
+            }
+
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>תאריך</th>
+                            <th>קטגוריה</th>
+                            <th class="subcategory-col">תת-קטגוריה</th>
+                            <th>סכום</th>
+                            <th>תיאור</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            data.forEach(item => {
+                html += `
+                    <tr>
+                        <td>${item.date}</td>
+                        <td>${item.category}</td>
+                        <td class="subcategory-col">${item.subcategory}</td>
+                        <td class="amount-cell">${formatCurrency(item.amount)}</td>
+                        <td>${item.description}</td>
+                    </tr>
+                `;
+            });
+
+            html += '</tbody></table>';
+            expensesContent.innerHTML = html;
+        }
+
+        async function init() {
+            try {
+                const data = await fetchData();
+                renderSummary(data);
+                renderExpenses(data);
+
+                document.getElementById('last-updated').textContent =
+                    `עודכן לאחרונה: ${new Date().toLocaleDateString('he-IL')}`;
+            } catch (error) {
+                document.getElementById('summary-content').innerHTML =
+                    '<div class="error">שגיאה בטעינת הנתונים. אנא נסו שוב מאוחר יותר.</div>';
+                document.getElementById('expenses-content').innerHTML =
+                    '<div class="error">שגיאה בטעינת הנתונים. אנא נסו שוב מאוחר יותר.</div>';
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
