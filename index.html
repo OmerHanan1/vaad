@@ -120,6 +120,38 @@
             padding-bottom: 10px;
         }
 
+        .filters {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .filter-group label {
+            font-weight: 500;
+            color: #555;
+        }
+
+        .filter-group select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            background: #fff;
+            cursor: pointer;
+        }
+
+        .filter-group select:focus {
+            outline: none;
+            border-color: #0d9488;
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
@@ -219,6 +251,20 @@
 
         <div class="expenses">
             <h2>פירוט הוצאות</h2>
+            <div class="filters" id="filters" style="display: none;">
+                <div class="filter-group">
+                    <label for="filter-category">קטגוריה:</label>
+                    <select id="filter-category">
+                        <option value="">הכל</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="filter-month">חודש:</label>
+                    <select id="filter-month">
+                        <option value="">הכל</option>
+                    </select>
+                </div>
+            </div>
             <div id="expenses-content">
                 <div class="loading">טוען נתונים...</div>
             </div>
@@ -237,6 +283,7 @@
 
         let pieChart = null;
         let barChart = null;
+        let allData = [];
 
         async function fetchData() {
             try {
@@ -525,13 +572,77 @@
             expensesContent.innerHTML = html;
         }
 
+        function populateFilters(data) {
+            const categorySelect = document.getElementById('filter-category');
+            const monthSelect = document.getElementById('filter-month');
+
+            // Get unique categories
+            const categories = [...new Set(data.map(item => item.category).filter(Boolean))].sort();
+            categories.forEach(cat => {
+                const option = document.createElement('option');
+                option.value = cat;
+                option.textContent = cat;
+                categorySelect.appendChild(option);
+            });
+
+            // Get unique months
+            const monthsMap = new Map();
+            data.forEach(item => {
+                const date = parseDate(item.date);
+                if (date) {
+                    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                    if (!monthsMap.has(key)) {
+                        monthsMap.set(key, { key, label: getMonthYear(date), date });
+                    }
+                }
+            });
+
+            const sortedMonths = [...monthsMap.values()].sort((a, b) => b.date - a.date);
+            sortedMonths.forEach(m => {
+                const option = document.createElement('option');
+                option.value = m.key;
+                option.textContent = m.label;
+                monthSelect.appendChild(option);
+            });
+
+            // Add event listeners
+            categorySelect.addEventListener('change', applyFilters);
+            monthSelect.addEventListener('change', applyFilters);
+
+            document.getElementById('filters').style.display = 'flex';
+        }
+
+        function applyFilters() {
+            const categoryFilter = document.getElementById('filter-category').value;
+            const monthFilter = document.getElementById('filter-month').value;
+
+            let filtered = allData;
+
+            if (categoryFilter) {
+                filtered = filtered.filter(item => item.category === categoryFilter);
+            }
+
+            if (monthFilter) {
+                filtered = filtered.filter(item => {
+                    const date = parseDate(item.date);
+                    if (!date) return false;
+                    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                    return key === monthFilter;
+                });
+            }
+
+            renderExpenses(filtered);
+        }
+
         async function init() {
             try {
                 const data = await fetchData();
+                allData = data;
 
                 if (data.length > 0) {
                     renderPieChart(data);
                     renderBarChart(data);
+                    populateFilters(data);
                 }
 
                 renderSummary(data);
