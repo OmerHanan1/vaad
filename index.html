@@ -642,11 +642,15 @@
                 if (data.length > 0) {
                     renderPieChart(data);
                     renderBarChart(data);
-                    populateFilters(data);
                 }
 
                 renderSummary(data);
                 renderExpenses(data);
+
+                // Populate filters after main content renders
+                if (data.length > 0) {
+                    populateFilters(data);
+                }
 
                 document.getElementById('last-updated').textContent =
                     `עודכן לאחרונה: ${new Date().toLocaleDateString('he-IL')}`;
